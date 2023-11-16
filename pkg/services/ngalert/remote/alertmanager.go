@@ -171,7 +171,7 @@ func (am *Alertmanager) SaveAndApplyConfig(ctx context.Context, cfg *apimodels.P
 }
 
 func (am *Alertmanager) saveConfig(ctx context.Context, cfg *apimodels.PostableUserConfig) error {
-	b, err := json.Marshal(&cfg)
+	b, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to serialize the Alertmanager configuration: %w", err)
 	}
@@ -377,7 +377,6 @@ func (am *Alertmanager) postConfig(ctx context.Context, cfg *apimodels.PostableU
 	if err != nil {
 		return fmt.Errorf("error creating request: %v", err)
 	}
-
 	am.log.Debug("Sending request to external Alertmanager", "method", http.MethodPost, "url", url)
 	res, err := am.httpClient.Do(req)
 	if err != nil {
@@ -431,7 +430,7 @@ func (am *Alertmanager) getConfig(ctx context.Context) (*apimodels.PostableUserC
 		}
 	}()
 
-	config, err := io.ReadAll(res.Body)
+	b, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading request response: %w", err)
 	}
@@ -440,15 +439,10 @@ func (am *Alertmanager) getConfig(ctx context.Context) (*apimodels.PostableUserC
 		return nil, fmt.Errorf("setting config failed with status code %d", res.StatusCode)
 	}
 
-	rawConfig, err := yaml.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing remote Alertmanager response: %w", err)
-	}
-
-	postableConfig, err := notifier.Load(rawConfig)
-	if err != nil {
+	var postableConfig apimodels.PostableUserConfig
+	if err := yaml.Unmarshal(b, &postableConfig); err != nil {
 		return nil, fmt.Errorf("error parsing remote Alertmanager configuration: %w", err)
 	}
 
-	return postableConfig, nil
+	return &postableConfig, nil
 }
