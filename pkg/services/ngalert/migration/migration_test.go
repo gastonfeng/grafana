@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
+	migrationStore "github.com/grafana/grafana/pkg/services/ngalert/migration/store"
 	"xorm.io/xorm"
 
 	"github.com/grafana/grafana/pkg/components/simplejson"
@@ -23,7 +24,6 @@ import (
 	"github.com/grafana/grafana/pkg/services/dashboards"
 	"github.com/grafana/grafana/pkg/services/datasources"
 	apimodels "github.com/grafana/grafana/pkg/services/ngalert/api/tooling/definitions"
-	migrationStore "github.com/grafana/grafana/pkg/services/ngalert/migration/store"
 	ngModels "github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/setting"
@@ -50,27 +50,30 @@ func TestServiceStart(t *testing.T) {
 			expected:       true,
 		},
 		{
-			name: "when unified alerting disabled, migration is already run and force migration is enabled, then revert migration",
+			name: "when unified alerting disabled, migration is already run and CleanUpgrade is enabled, then revert migration",
 			config: &setting.Cfg{
 				UnifiedAlerting: setting.UnifiedAlertingSettings{
 					Enabled: pointer(false),
+					Upgrade: setting.UnifiedAlertingUpgradeSettings{
+						CleanUpgrade: true,
+					},
 				},
-				ForceMigration: true,
 			},
 			isMigrationRun: true,
 			expected:       false,
 		},
 		{
-			name: "when unified alerting disabled, migration is already run and force migration is disabled, then the migration should panic",
+			name: "when unified alerting disabled, migration is already run and CleanUpgrade is disabled, then the migration status should set to false",
 			config: &setting.Cfg{
 				UnifiedAlerting: setting.UnifiedAlertingSettings{
 					Enabled: pointer(false),
+					Upgrade: setting.UnifiedAlertingUpgradeSettings{
+						CleanUpgrade: false,
+					},
 				},
-				ForceMigration: false,
 			},
 			isMigrationRun: true,
-			expected:       true,
-			expectedErr:    true,
+			expected:       false,
 		},
 		{
 			name: "when unified alerting enabled and migration is already run, then do nothing",
