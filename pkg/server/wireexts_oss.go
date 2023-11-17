@@ -121,7 +121,7 @@ var wireExtsTestSet = wire.NewSet(
 var wireExtsBaseCLISet = wire.NewSet(
 	NewModuleRunner,
 
-	metrics.ProvideRegistry,
+	metrics.WireSet,
 	featuremgmt.ProvideManagerService,
 	featuremgmt.ProvideToggles,
 	hooks.ProvideService,
