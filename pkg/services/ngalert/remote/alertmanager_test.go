@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"math/rand"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -70,6 +72,38 @@ func TestNewAlertmanager(t *testing.T) {
 			require.NotNil(tt, am.httpClient)
 		})
 	}
+}
+
+func TestApplyConfig(t *testing.T) {
+	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	okHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// ApplyConfig performs a readiness check at startup.
+	// A non-200 response should result in an error.
+	server := httptest.NewServer(errorHandler)
+	cfg := AlertmanagerConfig{
+		URL: server.URL,
+	}
+	am, err := NewAlertmanager(cfg, 1, nil)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	require.Error(t, am.ApplyConfig(ctx, nil))
+	require.False(t, am.Ready())
+
+	// A 200 status code response should make the check succeed.
+	server.Config.Handler = okHandler
+	require.NoError(t, am.ApplyConfig(ctx, nil))
+	require.True(t, am.Ready())
+
+	// If we already got a 200 status code response, we shouldn't make the HTTP request again.
+	server.Config.Handler = errorHandler
+	require.NoError(t, am.ApplyConfig(ctx, nil))
+	require.True(t, am.Ready())
 }
 
 func TestIntegrationRemoteAlertmanagerConfiguration(t *testing.T) {
