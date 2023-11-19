@@ -7,6 +7,7 @@ import (
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
+	legacymodels "github.com/grafana/grafana/pkg/services/alerting/models"
 	"github.com/grafana/grafana/pkg/services/folder"
 	migmodels "github.com/grafana/grafana/pkg/services/ngalert/migration/models"
 	migrationStore "github.com/grafana/grafana/pkg/services/ngalert/migration/store"
@@ -29,6 +30,7 @@ type OrgMigration struct {
 	silences            []*pb.MeshSilence
 	alertRuleTitleDedup map[string]Deduplicator // Folder -> Deduplicator (Title).
 	alertRuleGroupDedup map[string]Deduplicator // Folder -> Deduplicator (Group).
+	channelCache        *ChannelCache
 
 	// Migrated folder for a dashboard based on permissions. Parent Folder ID -> unique dashboard permission -> custom folder.
 	permissionsMap        map[int64]map[permissionHash]*folder.Folder
@@ -56,6 +58,7 @@ func (ms *migrationService) newOrgMigration(orgID int64) *OrgMigration {
 
 		// We deduplicate alert rule groups so that we don't have to ensure that the alerts rules have the same interval.
 		alertRuleGroupDedup: make(map[string]Deduplicator),
+		channelCache:        &ChannelCache{cache: make(map[any]*legacymodels.AlertNotification)},
 
 		permissionsMap:        make(map[int64]map[permissionHash]*folder.Folder),
 		folderCache:           make(map[int64]*folder.Folder),
@@ -88,6 +91,28 @@ func (om *OrgMigration) AlertGroupDeduplicator(folderUID string) Deduplicator {
 		}
 	}
 	return om.alertRuleGroupDedup[folderUID]
+}
+
+// ChannelCache caches channels by ID and UID.
+type ChannelCache struct {
+	cache map[any]*legacymodels.AlertNotification
+}
+
+func (c *ChannelCache) LoadChannels(channels []*legacymodels.AlertNotification) {
+	for _, channel := range channels {
+		c.cache[channel.ID] = channel
+		c.cache[channel.UID] = channel
+	}
+}
+
+func (c *ChannelCache) GetChannelByID(id int64) (*legacymodels.AlertNotification, bool) {
+	channel, ok := c.cache[id]
+	return channel, ok
+}
+
+func (c *ChannelCache) GetChannelByUID(uid string) (*legacymodels.AlertNotification, bool) {
+	channel, ok := c.cache[uid]
+	return channel, ok
 }
 
 // Deduplicator is a wrapper around map[string]struct{} and util.GenerateShortUID() which aims help maintain and generate
