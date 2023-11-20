@@ -210,8 +210,6 @@ func TestServiceRevert(t *testing.T) {
 
 		require.NoError(t, service.Run(ctx))
 
-		require.NoError(t, service.Run(ctx))
-
 		// Verify migration was run.
 		checkMigrationStatus(t, ctx, service, anyOrg, true)
 		checkMigrationStatus(t, ctx, service, 1, true)
