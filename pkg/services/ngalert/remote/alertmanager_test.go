@@ -123,7 +123,7 @@ func TestIntegrationRemoteAlertmanagerConfiguration(t *testing.T) {
 		URL:               amURL + "/alertmanager",
 		TenantID:          tenantID,
 		BasicAuthPassword: password,
-		ConfigEndpoint:    "/api/v0/grafana/config",
+		ConfigEndpoint:    "/api/v1/grafana/config",
 	}
 	store := notifier.NewFakeConfigStore(t, make(map[int64]*ngmodels.AlertConfiguration))
 	am, err := NewAlertmanager(cfg, 1, store)
@@ -131,16 +131,15 @@ func TestIntegrationRemoteAlertmanagerConfiguration(t *testing.T) {
 
 	// We should have no configuration at first.
 	ctx := context.Background()
-	config, err := am.getConfig(ctx)
-	require.NoError(t, err)
-	require.Empty(t, config.AlertmanagerConfig)
-	require.Empty(t, config.TemplateFiles)
+	_, err = am.getConfig(ctx)
+	require.Error(t, err)
+	require.Equal(t, "config not found", err.Error())
 
 	// ApplyConfig performs a readiness check.
 	require.NoError(t, am.ApplyConfig(ctx, nil))
 
 	// SaveAndApplyConfig should send the configuration to the remote Alertmanager and store it locally.
-	config, err = notifier.Load([]byte(testGrafanaConfig))
+	config, err := notifier.Load([]byte(testGrafanaConfig))
 	require.NoError(t, err)
 	require.NoError(t, am.SaveAndApplyConfig(ctx, config))
 

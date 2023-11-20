@@ -23,7 +23,6 @@ import (
 	amalertgroup "github.com/prometheus/alertmanager/api/v2/client/alertgroup"
 	amreceiver "github.com/prometheus/alertmanager/api/v2/client/receiver"
 	amsilence "github.com/prometheus/alertmanager/api/v2/client/silence"
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -367,9 +366,21 @@ func (r *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 // TODO: change implementation, this is only useful for testing other methods.
 // TODO: decrypt data.
 func (am *Alertmanager) postConfig(ctx context.Context, cfg *apimodels.PostableUserConfig) error {
-	b, err := yaml.Marshal(cfg)
+	cfgBytes, err := json.Marshal(cfg.AlertmanagerConfig)
 	if err != nil {
 		return err
+	}
+	config := struct {
+		TemplateFiles      map[string]string `json:"template_files"`
+		AlertmanagerConfig string            `json:"grafana_alertmanager_config"`
+	}{
+		TemplateFiles:      cfg.TemplateFiles,
+		AlertmanagerConfig: string(cfgBytes),
+	}
+
+	b, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("error marshaling Alertmanager configuration: %w", err)
 	}
 
 	url := strings.TrimSuffix(am.url, "/alertmanager") + am.configEndpoint
@@ -435,14 +446,25 @@ func (am *Alertmanager) getConfig(ctx context.Context) (*apimodels.PostableUserC
 		return nil, fmt.Errorf("error reading request response: %w", err)
 	}
 
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("setting config failed with status code %d", res.StatusCode)
+	type data struct {
+		TemplateFiles      map[string]string `json:"template_files"`
+		AlertmanagerConfig string            `json:"grafana_alertmanager_config"`
+	}
+	var body struct {
+		Data data `json:"data"`
+	}
+	if err := json.Unmarshal(b, &body); err != nil {
+		return nil, fmt.Errorf("error unmarshaling remote Alertmanager configuration: %w", err)
 	}
 
-	var postableConfig apimodels.PostableUserConfig
-	if err := yaml.Unmarshal(b, &postableConfig); err != nil {
-		return nil, fmt.Errorf("error parsing remote Alertmanager configuration: %w", err)
+	var amConfig apimodels.PostableApiAlertingConfig
+	if err := json.Unmarshal([]byte(body.Data.AlertmanagerConfig), &amConfig); err != nil {
+		return nil, err
 	}
 
+	postableConfig := apimodels.PostableUserConfig{
+		TemplateFiles:      body.Data.TemplateFiles,
+		AlertmanagerConfig: amConfig,
+	}
 	return &postableConfig, nil
 }
